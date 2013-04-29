@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+	<title>EaselJS</title>
+    <style type="text/css">
+        body { background-color:#333; }
+        body { margin:0px; } 
+        #canvas { background-image:url(assets/bg.jpg); background-position: middle center; }
+        div.wrp_canvas { margin:auto; text-align:center; vertical-align:middle; }
+    </style>
+    <link href='http://fonts.googleapis.com/css?family=VT323' rel='stylesheet' type='text/css'>
+    <script type="text/javascript" src="http://code.createjs.com/createjs-2013.02.12.min.js"></script>
+    <script>
+    var stage;
+    var gameboard;
+    var hud;
+    var wall;
+    var currState = "IDLE";
+    var nextState = "READY";
+    
+    var blocksize = 20;
+    var player;
+    var bgtile;
+    var screenHome;
+    var screenGameOver;
+    var obstacles = new Array();
+    var enemies = new Array();
+    var enemyColors = ["#00ff00","#0000ff","#ffff00","#00ffff"];
+    var enemyBitmaps = [];
+    var enemyTrailBitmaps = [];
+    var enemyTrailCornerBitmaps = [];
+    var playerTrail;
+    var playerTrailBitmap;
+    var playerTrailCornerBitmap;
+    var homeTitleBitmap;
+    var gameOverBGBitmap
+    var gameoverResetOn;
+    var gameoverResetOff;
+    
+    var enemyTrails = new Array();
+    var txtWave;
+    var lblNextWave;
+    var txtNextWave;
+    var timeNextWaveIn = 30;
+    var timeLastWave = 0;
+    
+    var playerDirection = 0;
+    var initialSpeed = 0.05;
+    var speed = 0.05; //blocks per tick
+    var wave = 0;
+    
+    var txtTrailCount;
+    var txtDebug;
+    
+    var tickmod = 0;
+    
+    var timerSoundsInitial = 5;
+    var timerSounds = 5;
+    
+    function init() { 
+        var canvas = document.getElementById("canvas");
+    	stage = new createjs.Stage(canvas); //## create the stage object using the HTML5 canvas
+        stage.enableMouseOver();
+        var ready = loadBitmaps();        
+        
+        drawGameboardGrid();
+        
+        gameboard = new createjs.Container();
+        stage.addChild(gameboard);
+        hud = new createjs.Container();
+        stage.addChild(hud);
+        
+        wall = drawWall();
+        gameboard.addChild(wall);
+        
+        txtDebug = new createjs.Text("XX.XX", "bold 12px Arial", "#ffffff");
+        txtDebug.x = stage.canvas.width - txtDebug.getMeasuredWidth() - 5;
+        txtDebug.y = stage.canvas.height - 5;
+        txtDebug.textBaseline = "alphabetic";
+        hud.addChild(txtDebug);
+        
+        txtTrailCount = new createjs.Text("  ", "bold 12px Arial", "#ffffff");
+        txtTrailCount.x = txtDebug.x - txtTrailCount.getMeasuredWidth() - 20;
+        txtTrailCount.y = stage.canvas.height - 5;
+        txtTrailCount.textBaseline = "alphabetic";
+        hud.addChild(txtTrailCount);
+        
+        createjs.Ticker.setFPS(60);
+        createjs.Ticker.addListener(window);
+    }
+    function tick(){
+        if (currState!=nextState)
+        {
+            //handle outgoing state            
+            switch(currState){
+                case "INGAME":
+                    destroyInGame();
+                    break;
+                case "HOME":
+                    destroyHome();
+                    break;
+                case "GAMEOVER":
+                    destroyGameOver();
+                    break;
+            }
+            currState = nextState;
+            //handle incoming state
+            switch(nextState){
+                case "INGAME":
+                    initGame();
+                    break;
+                case "HOME":
+                    initHome();
+                    break;
+                case "GAMEOVER":
+                    initGameOver();
+                    break;
+                
+            }
+        }
+        if (currState=="INGAME"){
+            //if (createjs.Ticker.getTime() % 1000 < 100) console.log("player trail: " +player.trail.length);
+            txtTrailCount.text = player.trail.length;
+            tickmod = createjs.Ticker.getTicks() % 2;
+            if (tickmod == 0) {
+                detectCollisions();
+                updateTimer();
+            }
+        }
+        txtDebug.text = Math.floor(createjs.Ticker.getMeasuredFPS()*100)/100;
+        stage.update();
+    }
+    function loadBitmaps(){
+        bgtile = new createjs.Bitmap("assets/bg-grid-tile.png");
+
+        var queue = new createjs.LoadQueue();
+        queue.installPlugin(createjs.Sound);
+        queue.addEventListener("complete", function(){ 
+            homeTitleBitmap = new createjs.Bitmap(queue.getResult("assets/title.png"));
+            homeExecuteOn = new createjs.Bitmap(queue.getResult("assets/btn-execute-on.png"));
+            homeExecuteOff = new createjs.Bitmap(queue.getResult("assets/btn-execute-off.png"));
+            gameOverBGBitmap = new createjs.Bitmap(queue.getResult("assets/gameover.png"));
+            gameoverResetOn = new createjs.Bitmap(queue.getResult("assets/btn-reset-on.png"));
+            gameoverResetOff = new createjs.Bitmap(queue.getResult("assets/btn-reset-off.png"));
+            
+            playerBitmap = new createjs.Bitmap(queue.getResult("assets/lightdisc-blue.png"));
+            playerTrailBitmap = new createjs.Bitmap(queue.getResult("assets/lightblock-blue.png"));
+            var enemyBitmapRed = new createjs.Bitmap(queue.getResult("assets/lightdisc-red.png"));
+            var enemyBitmapPurple = new createjs.Bitmap(queue.getResult("assets/lightdisc-purple.png"));
+            var enemyBitmapGreen = new createjs.Bitmap(queue.getResult("assets/lightdisc-green.png"));
+            var enemyBitmapOrange = new createjs.Bitmap(queue.getResult("assets/lightdisc-orange.png"));
+            var enemyBitmapYellow = new createjs.Bitmap(queue.getResult("assets/lightdisc-yellow.png"));
+            enemyBitmaps = [enemyBitmapRed,enemyBitmapPurple,enemyBitmapGreen,enemyBitmapOrange,enemyBitmapYellow];            
+            var enemyTrailBitmapRed = new createjs.Bitmap(queue.getResult("assets/lightblock-red.png"));
+            var enemyTrailBitmapPurple = new createjs.Bitmap(queue.getResult("assets/lightblock-purple.png"));
+            var enemyTrailBitmapGreen = new createjs.Bitmap(queue.getResult("assets/lightblock-green.png"));
+            var enemyTrailBitmapOrange = new createjs.Bitmap(queue.getResult("assets/lightblock-orange.png"));
+            var enemyTrailBitmapYellow = new createjs.Bitmap(queue.getResult("assets/lightblock-yellow.png"));
+            enemyTrailBitmaps = [enemyTrailBitmapRed,enemyTrailBitmapPurple,enemyTrailBitmapGreen,enemyTrailBitmapOrange,enemyTrailBitmapYellow];
+            playerTrailCornerBitmap = new createjs.Bitmap(queue.getResult("assets/lightblock-blue-corner.png"));
+            var enemyTrailCornerBitmapRed = new createjs.Bitmap(queue.getResult("assets/lightblock-red-corner.png"));
+            var enemyTrailCornerBitmapPurple = new createjs.Bitmap(queue.getResult("assets/lightblock-purple-corner.png"));
+            var enemyTrailCornerBitmapGreen = new createjs.Bitmap(queue.getResult("assets/lightblock-green-corner.png"));
+            var enemyTrailCornerBitmapOrange = new createjs.Bitmap(queue.getResult("assets/lightblock-orange-corner.png"));
+            var enemyTrailCornerBitmapYellow = new createjs.Bitmap(queue.getResult("assets/lightblock-yellow-corner.png"));
+            enemyTrailCornerBitmaps = [enemyTrailCornerBitmapRed,enemyTrailCornerBitmapPurple,enemyTrailCornerBitmapGreen,enemyTrailCornerBitmapOrange,enemyTrailCornerBitmapYellow];
+            nextState = "HOME";
+        });
+        queue.loadManifest(["assets/title.png","assets/btn-execute-on.png","assets/btn-execute-off.png",
+                    "assets/lightblock-blue.png","assets/lightblock-red.png","assets/lightblock-purple.png","assets/lightblock-green.png","assets/lightblock-orange.png","assets/lightblock-yellow.png",
+                    "assets/lightblock-blue-corner.png","assets/lightblock-red-corner.png","assets/lightblock-purple-corner.png","assets/lightblock-green-corner.png","assets/lightblock-orange-corner.png","assets/lightblock-yellow-corner.png",
+                    "assets/gameover.png","assets/btn-reset-on.png","assets/btn-reset-off.png",
+                    "assets/lightdisc-blue.png","assets/lightdisc-red.png","assets/lightdisc-purple.png","assets/lightdisc-green.png","assets/lightdisc-orange.png","assets/lightdisc-yellow.png",
+                    {id:"sound-rezup",src: "assets/rezup.wav"},
+                    {id:"sound-derez",src: "assets/derezzed.wav"},
+                    {id:"sound-click",src: "assets/click.wav"},
+                    {id:"sound-tick",src: "assets/tick.wav"},
+                    {id:"sound-turn",src: "assets/turn.wav"}
+                    ], false);
+        queue.load();
+        
+    }
+    function initHome(){
+        screenHome = new createjs.Container();
+        
+        var btnExecute = new Button(homeExecuteOn.clone(),homeExecuteOff.clone());
+        btnExecute.addEventListener("click",function(e){
+            nextState = "INGAME";
+            createjs.Sound.play("sound-click");
+        });
+        screenHome.addChild(btnExecute);
+        btnExecute.x = stage.canvas.width/2 - btnExecute.getWidth()/2;
+        btnExecute.y = stage.canvas.height*2/3;
+        
+        var title = homeTitleBitmap.clone();
+        title.x = stage.canvas.width/2-606/2;
+        title.y = stage.canvas.height/3;
+        screenHome.addChild(title);
+        
+        stage.addChild(screenHome);
+    }
+    function destroyHome(){
+        stage.removeChild(screenHome);
+        screenHome = null;
+    }
+    function initGameOver(){        
+        screenGameOver = new createjs.Container();
+        var bg = gameOverBGBitmap.clone();
+        bg.x = stage.canvas.width/2-bg.image.width/2;
+        bg.y = stage.canvas.height/2 - bg.image.height/2;
+        screenGameOver.addChild(bg);
+        
+        var btnReset = new Button(gameoverResetOn.clone(),gameoverResetOff.clone());
+        btnReset.addEventListener("click",function(e){
+            nextState = "HOME";
+            createjs.Sound.play("sound-click");
+        });
+        screenGameOver.addChild(btnReset);
+        btnReset.x = stage.canvas.width/2 - btnReset.getWidth()/2;
+        btnReset.y = bg.y + bg.image.height - btnReset.getHeight() - 50;
+        
+        stage.addChild(screenGameOver);
+    }
+    function destroyGameOver(){
+        stage.removeChild(screenGameOver);
+        screenGameOver = null;        
+    }
+    function initGame(){
+        player = new Player("hero","#ffffff",0,playerBitmap.clone()); //drawPlayer();
+        player.direction = 0; //playerDirection = 0;
+        player.name = "hero";
+        var pt = new createjs.Point(Math.floor(stage.canvas.width/2),Math.floor(stage.canvas.height/2));
+        player.position(pt.x,pt.y);
+                
+        playerTrail = new Trail(player,playerTrailBitmap,playerTrailCornerBitmap);
+        gameboard.addChild(playerTrail);
+        gameboard.addChild(player);
+        
+        obstacles = [wall];
+        
+        txtWave = new createjs.Text("CYCLE: 01", "24px 'VT323', 'VT-100',courier, 'Times New Roman', serif, "#ffffff");
+        txtWave.x = 30;
+        txtWave.y = 40;
+        txtWave.textBaseline = "alphabetic";
+        hud.addChild(txtWave);
+        
+        lblNextWave = new createjs.Text("NEXT: ", "24px 'VT323', 'VT-100',courier, 'Times New Roman', serif, "#ffffff");
+        txtNextWave = new createjs.Text(timeNextWaveIn, "24px 'VT323', 'VT-100',courier, 'Times New Roman', serif, "#ffffff");
+        
+        lblNextWave.x = 30;//stage.canvas.width - lblNextWave.getMeasuredWidth() - txtNextWave.getMeasuredWidth() - 50;
+        lblNextWave.y = 65;
+        lblNextWave.textBaseline = "alphabetic";
+        hud.addChild(lblNextWave);
+        
+        txtNextWave.x = lblNextWave.x + txtNextWave.getMeasuredWidth() + 40;
+        txtNextWave.y = 65;
+        txtNextWave.textBaseline = "alphabetic";
+        hud.addChild(txtNextWave);
+                                
+        document.onkeyup = handleKeyUp;
+        start();
+    }
+    function destroyInGame(){ 
+        resetDefaultGameboard();
+        player = null;
+        playerTrail = null;
+        enemies = [];
+        enemyTrails = [];
+        txtWave.text = "CYCLE: 01";
+    }
+    function initWave(){
+        var count = 3;//2;//wave;//(wave+1)+1;
+        txtWave.text = "CYCLE: " + ((wave+1<10) ? "0"+(wave+1) : (wave+1));
+        enemies = new Array();
+        for (var i=0;i<count;i++){
+            //console.log('adding new enemy: '+i);
+            var rndBmp = Math.floor(Math.random()*enemyBitmaps.length);
+            var e = new Player("enemy",enemyColors[i],1,enemyBitmaps[rndBmp].clone());
+            e.direction = Math.PI*Math.floor(Math.random()*4)/2;
+            e.rotateHead(e.direction);
+            e.name = "enemy"+Math.floor(Math.random()*100000);
+            var j=0;
+            var clearSpot = false;
+            var pt;
+            var c = Math.floor(stage.canvas.width/blocksize);
+            var r = Math.floor(stage.canvas.height/blocksize);
+            while (j<100 && !clearSpot){
+                var rnd = Math.random();
+                var tmpx = Math.floor(rnd*c)*blocksize;
+                var tmpy = Math.floor(rnd*r)*blocksize;
+                var objs = gameboard.getObjectsUnderPoint(tmpx,tmpy);
+                if (objs.length==0) { clearSpot = true; }
+                //else { console.log(objs); }
+                //clearSpot = checkEmptyPoint(tmpx,tmpy,false);
+                if (clearSpot) { pt = new createjs.Point(tmpx,tmpy); }
+                //else { console.log(tmpx+'x'+tmpy+' not a clearSpot'); }
+                j += 1;
+            }
+            if (clearSpot && pt){
+                //console.log("found clearspot to add enemy");
+                e.position(pt.x,pt.y);
+                e.speed = speed;
+                var t = new Trail(e,enemyTrailBitmaps[rndBmp],enemyTrailCornerBitmaps[rndBmp]);
+                enemies.push(e);
+                enemyTrails.push(t);
+                gameboard.addChild(t);
+                gameboard.addChild(e);
+            }
+        }
+        createjs.Sound.play("sound-rezup");
+    }
+    function nextWave(){
+        wave += 1;
+        speed *= 1.5;
+        initWave();
+        player.speed *= 1.5;
+    }
+    function resetWave(){
+        clearWave();
+        wave = 0;
+        initialSpeed = 0.05;
+        player.speed = speed;
+        initWave();
+    }
+    function clearWave(){
+        console.log("clearWave");
+        while (enemies.length>0){
+            clearEnemy(enemies[0]);
+        }
+    }
+    function resetDefaultGameboard(){
+        console.log("resetDefaultGameboard");
+        while (gameboard.getNumChildren()>1) { gameboard.removeChild(gameboard.getChildAt(1)); }
+        hud.removeAllChildren();
+        obstacles = [wall];
+    }
+    function updateTimer(){
+        var curr = createjs.Ticker.getTime();
+        var t = Math.floor((timeLastWave + timeNextWaveIn*1000 - curr)/1000);
+        if (t<0) { 
+            nextWave(); timeLastWave = curr; t = timeNextWaveIn; timerSounds = timerSoundsInitial;
+        }
+        txtNextWave.text = ((t<10) ? "0" : "")+ t.toString();
+        if (t >= 0 && t == timerSounds) {
+            createjs.Sound.play("sound-tick");
+            timerSounds--;
+        }
+    }
+    function checkEmptyPoint(x,y,skipPlayer,skipPlayerTrail){
+        var collidePlayer = skipPlayer ? false : playerTrail.hitTest(x,y);
+        var collidePlayerTrail = skipPlayerTrail ? false : playerTrail.hitTest(x,y);
+        var collideObstacles = false;
+        for (var i=0;i<obstacles.length;i++){
+            var o = obstacles[i];
+            var bln = o.hitTest(x,y);
+            if (bln) { collideObstacles = true; break; }
+        }
+        var collideEnemies = false;
+        for (var i=0;i<enemies.length;i++){
+            var e = enemies[i];
+            var bln = e.hitTest(x,y);
+            if (bln) { collideEnemies = true; break; }
+        }
+        var collideEnemyTrails = false;
+        for (var i=0;i<enemyTrails.length;i++){
+            var e = enemyTrails[i];
+            var bln = e.hitTest(x,y);
+            if (bln) { collideEnemyTrails = true; break; }
+        }
+        /*
+        */
+        //if (collidePlayer) console.log("collidePlayer collision");
+        //if (collidePlayerTrail) console.log("collidePlayerTrail collision");
+        //if (collideObstacles) console.log("collideObstacles collision");
+        //if (collideEnemies) console.log("collideEnemies collision");
+        //if (collideEnemyTrails) console.log("collideEnemyTrails collision");
+        return !collidePlayer && !collidePlayerTrail && !collideObstacles && !collideEnemies && !collideEnemyTrails;
+        
+    }
+    function detectCollisions(){
+        if (!player.parent) return;
+        var players = enemies.slice(0);
+        players.unshift(player);
+        var obstactles = enemyTrails.slice(0).concat(obstacles.slice(0));
+        obstactles.unshift(playerTrail);
+        for (var i=0;i<players.length;i++){
+            var p = players[i];
+            var collision = false;
+            if (detectCollision(p,obstactles)) {
+                console.log("TRAIL COLLISION!");
+                collision = true;
+            }
+            if (collision) { handleCollision(p); console.log("COLLISION: " + p.name); }
+        }
+    }
+    function detectCollision(p,objs){
+        for (var t=0;t<objs.length;t++){
+            var obj = objs[t];
+            var grid = obj.gridPositions;
+            for (var b=0;b<grid.length;b++){
+                var pos = grid[b];
+                if (pos.x == p.c && pos.y == p.r) {
+                    if (obj.type == "trail"){
+                        if (obj.owner.name != p.name){ 
+                            return true;
+                        }
+                    } else return true;
+                }
+            }
+        }
+        return false;
+    }
+    function detectCollisions3(){
+        if (!player.parent) return; 
+        var players = enemies.slice(0);
+        players.unshift(player);
+        for (var i=0;i<players.length;i++){
+            var e = players[i];
+            var eCent = e.getBounds().c;
+            var eLead = getLeadingPlayerPoint(player);
+            var objs = getObjectsUnderGameboardRadius(eCent);
+            var collision = false;
+            if (objs.length > 0){
+                for (var j=0;j<objs.length;j++) { 
+                    var obj = objs[j];
+                    //check for players
+                    //check for trails
+                    if (obj.parent.type == "player") { 
+                        if (obj.parent.name==e.name)
+                        //player
+                        var n = (obj.parent.type) ? obj.parent.name : obj.name;
+                        if (n != e.name) {
+                            collision = true; 
+                            console.log(e.name + " COLLISION w");
+                            console.log(obj);
+                            break;
+                        }
+                    } else if (obj.parent.type=="trail"){                        
+                        if (obj.parent.owner.name != e.name){ collision = true; break; }
+                    } else { collision = true; break; }
+                }
+            }
+            if (collision) { handleCollision(e); console.log("COLLISION: " + e.name); }
+        }        
+    }
+    function detectCollisions2(){
+        if (!player.parent) return; 
+        var playerLead = getLeadingPlayerPoint(player);
+        //var playerLead = player.getBounds().c;
+        //if (!checkEmptyPoint(playerLead.x,playerLead.y,true,player.turning)){
+        var pCent = player.getBounds().c;
+        var objs = gameboard.getObjectsUnderPoint(pCent.x,pCent.y);
+        if (objs.length>0){
+            for (var i=0;i<objs.length;i++){
+                obj = objs[i];
+                if (obj != player && obj.parent != player 
+                    && obj.parent != playerTrail
+                    ) {
+                    console.log('player collision w:')
+                    console.log(obj);
+                    handleCollision(player);
+                    break;
+                }
+            }
+        }
+        for (var i=0;i<enemies.length;i++){
+            var e = enemies[i];
+            //var eLead = getLeadingPlayerPoint(e);
+            var eCent = e.getBounds().c;
+            //var objs = gameboard.getObjectsUnderPoint(eCent.x,eCent.y);
+            var objs = getObjectsUnderGameboardRadius(eCent);
+            //console.log("getObjectsUnderGameboardRadius:" + objs.length);
+            /*
+            for (var i=0;i<enemyTrails.length;i++){
+                var t = enemyTrails[i];
+                var ret = ndgmr.checkRectCollision(e,t);      
+                if (ret) objs.push(ret);
+            }
+            */
+            if (objs.length>0){
+                for (var i=0;i<objs.length;i++){
+                    obj = objs[i];
+                    var collided = false;
+                    if (obj.parent != e){
+                        //console.log(e.name+' poss coll');
+                        if (obj.parent.owner) {
+                            if (obj.parent.owner.name != e.name) { 
+                                collided = true; 
+                                console.log('trail found for ' + obj.parent.owner.name);
+                            }
+                        } else { collided = true; }                  
+                    }
+                    if (collided){
+                        //if (!checkEmptyPoint(eLead.x,eLead.y,false,false)){
+                        console.log(e.name + ' collision w:')
+                        console.log(obj);
+                        handleCollision(e);
+                    }
+                }
+            }
+        }
+    }
+    
+    function getObjectsUnderGameboardRadius(pt){
+        var r = 5;
+        var objs = [];
+        var pts = [pt,pt.clone(),pt.clone(),pt.clone(),pt.clone(),pt.clone(),pt.clone(),pt.clone(),pt.clone()];
+        pts[1].x -= r; pts[1].y -= r;
+        pts[2].x -= r; pts[2].y += r;
+        pts[3].x += r; pts[3].y += r;
+        pts[4].x += r; pts[4].y -= r;
+        pts[5].y -= r;
+        pts[6].x -= r;
+        pts[7].y += r;
+        pts[8].x += r;
+        for (var i=0;i<9;i++){
+            var tmps = gameboard.getObjectsUnderPoint(pts[i].x,pts[i].y);
+            for (var j=0;j<tmps.length;j++) { objs.push(tmps[j]); }
+        }
+        return objs;
+    }
+    function getLeadingPlayerPoint(obj){
+        if (obj.direction == 0) return obj.getBounds().cl;
+        else if (obj.direction == Math.PI/2) return obj.getBounds().ct;
+        else if (obj.direction == Math.PI) return obj.getBounds().cr;
+        else if (obj.direction == Math.PI*1.5) return obj.getBounds().cb;
+        else return obj.getBounds().c;
+    }
+    function handleCollision(p){
+        p.speed = 0;
+        if (p.name=="hero") gameover();
+        else clearEnemy(p);
+        createjs.Sound.play("sound-derez");
+    }
+    function start(){
+        player.direction = Math.PI/2;
+        player.speed = speed;
+        initWave();
+        timeLastWave = createjs.Ticker.getTime();
+    }
+    function stop(){
+        player.removeAllEventListeners();
+    }
+    function gameover(){
+        player.removeAllEventListeners();
+        player.speed = 0;
+        speed = initialSpeed;
+        wave = 0;
+        clearWave();
+        nextState = "GAMEOVER";
+    }
+    function clearEnemy(e){
+        console.log("clearEnemy")
+        console.log(e);
+        for (var i=0;i<enemyTrails.length;i++){
+            if (enemyTrails[i].owner.name == e.name) {
+                //enemyTrails[i].uncache();
+                gameboard.removeChild(enemyTrails[i]);
+                enemyTrails.splice(i,1);
+                break;
+            }
+        }
+        console.log("enemy trails cleared");
+        for (var i=0;i<enemies.length;i++){
+            if (enemies[i].name == e.name) {
+                enemies.splice(i,1); break;
+            }
+        }
+        console.log("enemy cleared");
+        gameboard.removeChild(e);
+    }
+    function respawnPlayer(){
+        player.speed = 0; return;
+        resetWave();
+        playerTrail.clear();
+        //stage.removeChild(player);
+        //player = new Player(); //drawPlayer();
+        var rnd = Math.floor(Math.random()*4);
+        player.direction = Math.PI*rnd/2; //playerDirection = 0;
+        player.trail = new Array();
+        var pt = new createjs.Point(Math.floor(stage.canvas.width/2),Math.floor(stage.canvas.height/2));
+        player.position(pt.x,pt.y);
+        //player.speed = speed;
+        //stage.addChild(player);
+        //stage.addChild(playerTrail);
+    }
+    function handleKeyUp(e){
+        if (currState == "INGAME" && player){
+            switch(e.keyCode)  {
+                case 37: // left
+                    player.changeDirection(0);
+                    break;
+                case 38: //up
+                    player.changeDirection(Math.PI/2);
+                    break;
+                case 39: //right
+                    player.changeDirection(Math.PI);
+                    break;
+                case 40: //down
+                    player.changeDirection(Math.PI*1.5);
+                    break;
+            }        
+        }
+    }
+    function diff(pt1,pt2){
+        if (pt1>=pt2) return pt1-pt2;
+        else return pt2-pt1;
+    }
+    function drawGameboardGrid(){
+        var tilegrid = new createjs.Container();
+        var curx = -10;
+        var cury = -10;
+        var c = Math.floor(stage.canvas.width/40)+1;
+        var r = Math.floor(stage.canvas.height/40)+1;
+        for (var i=0;i<r;i++){
+            for (var j=0;j<c;j++){
+            	var t = bgtile.clone();
+        		t.x = curx; t.y = cury;      
+                tilegrid.addChild(t);
+                curx += 40;
+            }
+            curx = -10;
+            cury += 40;
+        }
+        //tilegrid.cache(0,0,stage.canvas.width,stage.canvas.height);
+        stage.addChild(tilegrid);
+    }
+    function drawWall(){
+        var wall = new Obstacle("wall");
+        var w = 20;
+        var c = Math.floor(stage.canvas.width/w);  //40
+        var r = Math.floor(stage.canvas.height/w); //20
+        var t = c*2+r*2-4;
+        var wallblock = new createjs.Bitmap("assets/wall.png");
+        var wallcorner = new createjs.Bitmap("assets/wall-corner.png");
+        var gridPointX = 0;
+        var gridPointY = 0;
+        for (var i=0;i<t;i++){
+            var b = wallblock.clone();
+            wall.gridPositions.push(new createjs.Point(gridPointX,gridPointY));
+            if (i==0){ //ul
+                var b = wallcorner.clone();
+                b.x = w; b.y = 0;
+                b.rotation = 90;
+                wall.addChild(b);
+            } else if (i<c-1) { //ul to ur
+                b.x = i*w; b.y = 0;
+                b.regY = 20; b.scaleY = -1;
+                wall.addChild(b);
+            } else if (i==c-1) { //ur
+                var b = wallcorner.clone();
+                b.x = (i+1)*w; b.y = w;
+                b.rotation = 180;
+                wall.addChild(b);
+            } else if (i>=c && i<(c+r-2)) { //ur to lr
+                var d = i-c+1;
+                b.x = (c-1)*w; b.y = (d+1)*w;
+                b.rotation = -90;
+                wall.addChild(b);
+            } else if (i==c+r-2) {
+                var d = i-c-r;
+                var b = wallcorner.clone();
+                b.x = c*w-w; b.y = r*w;
+                b.rotation = -90;
+                wall.addChild(b);
+            } else if (i>(c+r-2) && i<(c+r+c-3)) {
+                var d = i-c-r+2;
+                b.x = d*w; b.y = (r-1)*w;
+                wall.addChild(b);
+            } else if (i == (c+r+c-3)) {
+                var b = wallcorner.clone();
+                var d = t-c-r-c+3;
+                b.x = 0; b.y = d*w;
+                wall.addChild(b);
+            //} else if (i == t-1) {
+            //    var b = wallcorner.clone();
+            //    var d = i-c-r-c;
+            //    b.x = 0; b.y = d*w;
+            //    //b.rotation = 90;
+            } else {
+                var d = i-c-r-c+3;
+                b.x = w; b.y = d*w;
+                b.rotation = 90;
+                wall.addChild(b);
+            }
+            if (i<c-1) gridPointX++;
+            else if (i<c+r-2) gridPointY++;
+            else if (i<c+r+c-3) gridPointX--;
+            else gridPointY--;
+        }
+        //wall.cache(0,0,stage.canvas.width,stage.canvas.height);
+        return wall;
+    }
+    function getPlayerNextBlock(p){
+        switch(p.direction){
+            case 0:
+                return new createjs.Point((Math.floor(p.x/blocksize)-1)*blocksize,p.y); break;
+            case Math.PI:
+                return new createjs.Point((Math.ceil(p.x/blocksize)+1)*blocksize,p.y); break;
+            case Math.PI/2:
+                return new createjs.Point(p.x,(Math.floor(p.y/blocksize)-1)*blocksize); break;
+            case Math.PI*1.5:
+                return new createjs.Point(p.x,(Math.ceil(p.y/blocksize)+1)*blocksize); break;
+            default:
+                console.log(p.direction);
+                console.log("UNKOWN!"); break;
+        }
+        
+    }
+    //## Player Object
+    function Player(type,c,ai,bmp){
+        this.initialize(type,c,ai,bmp);
+    }
+    Player.prototype = new createjs.Container();
+    Player.prototype.Container_initialize = Player.prototype.initialize;
+    Player.prototype.initialize = function(type,c,ai,bmp){ 
+        this.Container_initialize();
+        this.color = c;
+        this.bmp = bmp;
+        this.name = "playerobj";
+        this.type = "player";
+        this.playerType = type;
+        this.ai = ai;
+        if (this.bmp){
+            this.addChild(this.bmp);
+        } else {
+            var s = new createjs.Shape();
+            s.graphics.clear();
+            s.graphics.beginFill(this.color).drawRect(0,0,blocksize,blocksize);
+            this.addChild(s);
+        }
+        this.direction = Math.PI/2;
+        this.speed = 0;
+        this.addEventListener("tick",this.tick);
+        this.rx = this.x;
+        this.ry = this.y;
+        this.trail = new Array();
+        this.lastTrail = null;
+        this.turning = false;
+        this.turnedAt = new createjs.Point(-1,-1);
+        this.c = 0;
+        this.r = 0
+    }
+
+    Player.prototype.getBounds = function(){
+        return new Rectangle(this.x,this.y,blocksize,blocksize);
+    }
+    Player.prototype.position = function(x,y){
+        this.x = x;
+        this.y = y;
+        this.rx = x;
+        this.ry = y;
+        this.c = Math.floor(x/blocksize);
+        this.r = Math.floor(y/blocksize);
+    }
+    Player.prototype.tick = function(evt){
+        var p = evt.target;
+        if (p.speed>0){
+            if (tickmod == 0) { p.execAI(); }
+            p.move(Math.cos(p.direction)*blocksize*p.speed,Math.sin(p.direction)*blocksize*p.speed);
+        }
+    }
+    Player.prototype.execAI = function(){
+        switch (this.ai){
+            case 1:
+            /*    if (createjs.Ticker.getTime() % 5000 < 1000) {
+                    var dir = this.direction + Math.PI/2;
+                    if (dir>=Math.PI*2) dir = 0;
+                    this.changeDirection(dir);
+                }
+                break;
+            case 2: */
+                var next = getPlayerNextBlock(this);
+                //if (!checkEmptyPoint(next.x,next.y,false,false)){
+                if (gameboard.getObjectUnderPoint(next.x,next.y)){
+                    var dir = this.direction + Math.PI/2;
+                    if (dir>=Math.PI*2) dir = 0;
+                    this.changeDirection(dir);
+                }
+                break;
+            default:
+                break;
+        }
+    }
+    Player.prototype.changeDirection = function(dir){
+        this.turnedAt = new createjs.Point(Math.floor(this.x/blocksize),Math.floor(this.y/blocksize));
+        //console.log(this.direction);
+        if (this.direction == dir || Math.abs(this.direction-dir) == Math.PI) return;
+        //this.turning = true;
+        switch(this.direction){
+            case 0:
+                this.changeTo(Math.floor(this.x/blocksize)*blocksize,this.y,this.direction,dir); 
+                break;
+            case Math.PI:
+                //## should use ceil and factor for added space
+                this.changeTo(Math.ceil(this.x/blocksize)*blocksize,this.y,this.direction,dir); break;
+            case Math.PI/2:
+                this.changeTo(this.x,Math.floor(this.y/blocksize)*blocksize,this.direction,dir); break;
+            case Math.PI*1.5:
+                //## should use ceil and factor for added space
+                this.changeTo(this.x,Math.ceil(this.y/blocksize)*blocksize,this.direction,dir); 
+                break;
+            default:
+                console.log("UNKOWN!"); break;
+        }
+        this.direction = dir;
+        this.rotateHead(this.direction);
+    }
+    Player.prototype.rotateHead = function(dir){
+        switch(dir){
+            case 0:
+                this.bmp.rotation = -90; this.bmp.x = 0; this.bmp.y = 20; 
+                break;
+            case Math.PI:
+                this.bmp.rotation = 90; this.bmp.x = 20; this.bmp.y = 0;
+                break;
+            case Math.PI/2:
+                this.bmp.rotation = 0; this.bmp.x = 0; this.bmp.y = 0;
+                break;
+            case Math.PI*1.5:
+                this.bmp.rotation = 180; this.bmp.x = 20; this.bmp.y = 20;
+                break;
+            default:
+                console.log("UNKOWN DIR!"); break;
+        }
+    }
+    Player.prototype.changeTo = function(x,y,olddir,newdir){
+        var prev = new createjs.Point(this.x,this.y);
+        var left = (olddir > newdir);
+        this.x = x;
+        this.y = y;
+        this.c = Math.floor(x/blocksize);
+        this.r = Math.floor(y/blocksize);
+        var pt = new createjs.Point(x,y);
+        this.trail = [];
+        var t = new TrailBlock(pt,newdir,true,olddir);
+        //if (this.lastTrail){
+        //    if (this.lastTrail.pos.x != t.pos.x && 
+        //        this.lastTrail.pos.y != t.pos.y) this.trail.push(this.lastTrail); }
+        //if (olddir == Math.PI) this.trail.push(t);
+        //else 
+        this.lastTrail = t;
+        //this.trail.push();
+        //this.trail.push(prev);
+        createjs.Sound.play("sound-turn");
+        
+    }
+    Player.prototype.move = function (x,y){
+        var prev = new createjs.Point(this.x,this.y);
+        this.x -= x;
+        this.y -= y;
+        this.c = Math.floor(this.x/blocksize);
+        this.r = Math.floor(this.y/blocksize);
+        
+        var gridx = Math.floor(this.x/blocksize)*blocksize;
+        var gridy = Math.floor(this.y/blocksize)*blocksize;
+        switch (this.direction){
+            case Math.PI:
+                gridx = Math.ceil(this.x/blocksize)*blocksize;
+                //gridy = Math.floor(this.y/blocksize)*blocksize;
+                break;
+            case Math.PI*1.5:
+                gridy = Math.ceil(this.y/blocksize)*blocksize;
+                break;
+            
+        }
+        var gridpt = new createjs.Point(gridx,gridy);
+        if (this.lastTrail){
+            var l = this.lastTrail;
+            if (l.pos.x != gridx || l.pos.y != gridy) { 
+                this.trail.push(l);//(gridpt);
+                this.lastTrail = new TrailBlock(gridpt,this.direction,false);
+            }
+        } else { 
+            this.lastTrail = new TrailBlock(gridpt,this.direction,false); 
+        }
+        return;
+        //## what was i thinking????
+        /*
+        if (this.turning){
+            var dx = diff(this.turnedAt.x,this.x);
+            var dy = diff(this.turnedAt.x,this.x);
+            if (dx>blocksize || dy > blocksize) {
+                this.turning = false;
+                this.turnedAt = new createjs.Point(0,0);
+            }
+        }
+        var gridx = Math.floor(this.x/blocksize)*blocksize;
+        var gridy = Math.floor(this.y/blocksize)*blocksize;
+        var gridpt = new createjs.Point(gridx,gridy);
+        if (this.lastTrail){
+            var l = this.lastTrail;
+            var left = l.dir > this.direction+0.1;
+            if (l.pos.x != gridx || l.pos.y != gridy) { 
+                var corner = this.lastTrail.dir != this.direction;
+                if (false){//corner){
+                    var lpt = gridpt.clone();
+                    var incpre = false;
+                    var skipnew = false;
+                    switch(this.direction){
+                        case 0:
+                            if (left) lpt.x+=blocksize;
+                            break;
+                        case Math.PI/2:
+                            if (left) { lpt.y += blocksize; incpre = true; }
+                            break;
+                        case Math.PI:
+                            //lpt.y -= blocksize;
+                            if (left) incpre = true;
+                            else lpt.x -= blocksize;
+                            break;
+                        case Math.PI*1.5:
+                            if (left) lpt.x += blocksize;
+                            else { lpt.y += blocksize; incpre = false; skipnew = true; }
+                            break;
+                        default:
+                            console.log('UNKNOWN DIR!');
+                            break;
+                    }
+                    var c = new TrailBlock(lpt,this.direction,corner);
+                    if (incpre){
+                        this.trail.push(this.lastTrail);//(gridpt);
+                    }
+                    this.trail.push(c);
+                    this.lastTrail = null;
+                } else {
+                    this.trail.push(this.lastTrail);//(gridpt);
+                    this.lastTrail = new TrailBlock(gridpt,this.direction,corner);
+                }
+            }
+        } else { this.lastTrail = new TrailBlock(gridpt,this.direction,false); }
+        */
+    }
+    //## Button object
+    function Button(onState,offState){
+        this.initialize(onState,offState);
+    }
+    Button.prototype = new createjs.Container();
+    Button.prototype.Container_initialize = Button.prototype.initialize;
+    Button.prototype.initialize = function(onState,offState){ 
+        this.Container_initialize();
+        this.onState = onState;
+        this.offState = offState;
+        this.on = false;
+        this.onState.visible = false;
+        this.offState.visible = true;
+        this.addChild(this.onState);
+        this.addChild(this.offState);
+        this.addEventListener("mouseover",function(e){ e.target.on = true; e.target.update(); });
+        this.addEventListener("mouseout",function(e){ e.target.on = false; e.target.update(); });
+    }
+    Button.prototype.update = function(){
+        this.onState.visible = this.on;
+        this.offState.visible = !this.on;
+    }    
+    Button.prototype.getWidth = function(){ return this.offState.image.width; }
+    Button.prototype.getHeight = function(){ return this.offState.image.height; }
+    
+    //## Obstacle object
+    function Obstacle(name){
+        this.initialize(name);
+    }
+    Obstacle.prototype = new createjs.Container();
+    Obstacle.prototype.Container_initialize = Obstacle.prototype.initialize;
+    Obstacle.prototype.initialize = function(name){ 
+        this.Container_initialize();
+        this.type = "obstacle";
+        this.gridPositions = [];
+    }
+    Obstacle.prototype.clear = function() { 
+        this.removeAllChildren();
+        this.gridPositions = [];
+    }
+    
+    //## Trail object
+    function Trail(owner,bmp,bmpcnr){
+        this.initialize(owner,bmp,bmpcnr);
+    }
+    Trail.prototype = new createjs.Container();
+    Trail.prototype.Container_initialize = Trail.prototype.initialize;
+    Trail.prototype.initialize = function(owner,bmp,bmpcnr){ 
+        this.Container_initialize();
+        this.type="trail";
+        this.owner = owner;
+        this.bmp = bmp;
+        this.bmpCorner = bmpcnr;
+        this.drawn = [];
+        this.drawCount = 0;
+        this.gridPositions = [];
+        this.addEventListener("tick",function(evt){ if (evt.target.owner.speed>0) evt.target.update(); })
+    }
+    Trail.prototype.clear = function() { 
+        this.removeAllChildren();
+        //this.graphics.clear(); 
+        this.drawn = [];
+        this.gridPositions = [];
+    }
+    Trail.prototype.update = function(){
+        //if (createjs.Ticker.getTicks() % 2 > 0) return;
+        if (this.owner.trail.length<1) return;
+        
+        //this.graphics.beginFill(this.color);
+        while (this.owner.trail.length>0){
+            var tb = this.owner.trail.shift();
+            var b = tb.useCorner ? this.bmpCorner.clone() : this.bmp.clone();
+            b.x = tb.pos.x; b.y = tb.pos.y;
+            var rot = tb.dir/Math.PI*180 - 90;
+            rot = rot > 180 ? rot-360 : rot;
+            
+            var left = false;
+            if (tb.useCorner){
+                left = (tb.oldDir > tb.dir);
+                left = (tb.dir==0 && tb.oldDir == Math.PI*1.5) ? false : left;
+                left = (tb.dir==Math.PI*1.5 && tb.oldDir == 0) ? true : left;
+                //console.log(left);
+            }
+            
+            
+            switch(tb.dir){
+                case 0:
+                    if (tb.useCorner){
+                        if (left) { b.regY = 20; b.scaleY = -1; }
+                    } else { b.rotation = rot; b.y += 20; }
+                    break;
+                case Math.PI/2:
+                    if (tb.useCorner){
+                        if (!left) { b.regX = 20; b.scaleX = -1; }
+                    }
+                    break;
+                case Math.PI:
+                    if (tb.useCorner){
+                        b.regX = 20; b.scaleX = -1;
+                        if (!left) { b.regY = 20; b.scaleY = -1; }
+                    } else { b.rotation = rot; b.x += 20; }
+                    break;
+                case Math.PI*1.5:
+                    if (tb.useCorner) {
+                        if (left) { b.regX = 20; b.scaleX = -1; }
+                        b.regY = 20; b.scaleY = -1;
+                    }
+                    break;
+                default:
+                    console.log("UNKNOWN DIR!"); break;
+            }
+            this.addChild(b);
+            this.gridPositions.push(tb.gridPos);
+            //this.drawCount += 1;
+        }
+        //if (this.drawCount>3) { 
+        //    if (this.cacheCanvas) this.updateCache();//"destination-over");
+        //    else this.cache(0,0,stage.canvas.width,stage.canvas.height);
+        //    this.drawCount = 0;
+        //}
+    }
+    function Rectangle(x,y,w,h){
+        this.x = x;
+        this.y = y;
+        this.width = w;
+        this.height = h;
+        this.tl = new createjs.Point(this.x,this.y);
+        this.tr = new createjs.Point(this.x+this.width,this.y);
+        this.ct = new createjs.Point(this.x+this.width/2,this.y);
+        this.cl = new createjs.Point(this.x,this.y+this.height/2);
+        this.bl = new createjs.Point(this.x,this.y+this.height);
+        this.br = new createjs.Point(this.x+this.width,this.y+this.height);
+        this.cb = new createjs.Point(this.x+this.width/2,this.y+this.height);
+        this.cr = new createjs.Point(this.x+this.width,this.y+this.height/2);
+        this.c = new createjs.Point(this.x+this.width/2,this.y+this.height/2)
+    }
+    function TrailBlock(pt,dir,corner,oldDir){
+        this.pos = pt;
+        this.dir = dir;
+        this.gridPos = new createjs.Point(Math.floor(this.pos.x/blocksize),Math.floor(this.pos.y/blocksize))
+        this.oldDir = oldDir;
+        this.useCorner = corner;
+    }
+    </script>
+</head>
+    
+<body onload="init();">
+    <div class="wrp_canvas">
+		<canvas id="canvas" width="800" height="600"></canvas>
+	</div>
+</body>
+</html>
