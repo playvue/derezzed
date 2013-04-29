@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-	<title>EaselJS</title>
+	<title>DE-REZZED: Survival - A CreateJS game created for Ludum Dare 26</title>
     <style type="text/css">
         body { background-color:#333; }
         body { margin:0px; } 
@@ -120,7 +120,6 @@
             }
         }
         if (currState=="INGAME"){
-            //if (createjs.Ticker.getTime() % 1000 < 100) console.log("player trail: " +player.trail.length);
             txtTrailCount.text = player.trail.length;
             tickmod = createjs.Ticker.getTicks() % 2;
             if (tickmod == 0) {
@@ -239,14 +238,14 @@
         
         obstacles = [wall];
         
-        txtWave = new createjs.Text("CYCLE: 01", "24px 'VT323', 'VT-100',courier, 'Times New Roman', serif, "#ffffff");
+        txtWave = new createjs.Text("CYCLE: 01", "24px 'VT323', 'VT-100',courier, 'Times New Roman', serif", "#ffffff");
         txtWave.x = 30;
         txtWave.y = 40;
         txtWave.textBaseline = "alphabetic";
         hud.addChild(txtWave);
         
-        lblNextWave = new createjs.Text("NEXT: ", "24px 'VT323', 'VT-100',courier, 'Times New Roman', serif, "#ffffff");
-        txtNextWave = new createjs.Text(timeNextWaveIn, "24px 'VT323', 'VT-100',courier, 'Times New Roman', serif, "#ffffff");
+        lblNextWave = new createjs.Text("NEXT: ", "24px 'VT323', 'VT-100',courier, 'Times New Roman', serif", "#ffffff");
+        txtNextWave = new createjs.Text(timeNextWaveIn, "24px 'VT323', 'VT-100',courier, 'Times New Roman', serif", "#ffffff");
         
         lblNextWave.x = 30;//stage.canvas.width - lblNextWave.getMeasuredWidth() - txtNextWave.getMeasuredWidth() - 50;
         lblNextWave.y = 65;
@@ -274,7 +273,6 @@
         txtWave.text = "CYCLE: " + ((wave+1<10) ? "0"+(wave+1) : (wave+1));
         enemies = new Array();
         for (var i=0;i<count;i++){
-            //console.log('adding new enemy: '+i);
             var rndBmp = Math.floor(Math.random()*enemyBitmaps.length);
             var e = new Player("enemy",enemyColors[i],1,enemyBitmaps[rndBmp].clone());
             e.direction = Math.PI*Math.floor(Math.random()*4)/2;
@@ -291,14 +289,11 @@
                 var tmpy = Math.floor(rnd*r)*blocksize;
                 var objs = gameboard.getObjectsUnderPoint(tmpx,tmpy);
                 if (objs.length==0) { clearSpot = true; }
-                //else { console.log(objs); }
-                //clearSpot = checkEmptyPoint(tmpx,tmpy,false);
+                clearSpot = checkEmptyPoint(tmpx,tmpy,false);
                 if (clearSpot) { pt = new createjs.Point(tmpx,tmpy); }
-                //else { console.log(tmpx+'x'+tmpy+' not a clearSpot'); }
                 j += 1;
             }
             if (clearSpot && pt){
-                //console.log("found clearspot to add enemy");
                 e.position(pt.x,pt.y);
                 e.speed = speed;
                 var t = new Trail(e,enemyTrailBitmaps[rndBmp],enemyTrailCornerBitmaps[rndBmp]);
@@ -324,13 +319,11 @@
         initWave();
     }
     function clearWave(){
-        console.log("clearWave");
         while (enemies.length>0){
             clearEnemy(enemies[0]);
         }
     }
     function resetDefaultGameboard(){
-        console.log("resetDefaultGameboard");
         while (gameboard.getNumChildren()>1) { gameboard.removeChild(gameboard.getChildAt(1)); }
         hud.removeAllChildren();
         obstacles = [wall];
@@ -368,13 +361,6 @@
             var bln = e.hitTest(x,y);
             if (bln) { collideEnemyTrails = true; break; }
         }
-        /*
-        */
-        //if (collidePlayer) console.log("collidePlayer collision");
-        //if (collidePlayerTrail) console.log("collidePlayerTrail collision");
-        //if (collideObstacles) console.log("collideObstacles collision");
-        //if (collideEnemies) console.log("collideEnemies collision");
-        //if (collideEnemyTrails) console.log("collideEnemyTrails collision");
         return !collidePlayer && !collidePlayerTrail && !collideObstacles && !collideEnemies && !collideEnemyTrails;
         
     }
@@ -388,10 +374,9 @@
             var p = players[i];
             var collision = false;
             if (detectCollision(p,obstactles)) {
-                console.log("TRAIL COLLISION!");
                 collision = true;
             }
-            if (collision) { handleCollision(p); console.log("COLLISION: " + p.name); }
+            if (collision) { handleCollision(p); }
         }
     }
     function detectCollision(p,objs){
@@ -410,115 +395,6 @@
             }
         }
         return false;
-    }
-    function detectCollisions3(){
-        if (!player.parent) return; 
-        var players = enemies.slice(0);
-        players.unshift(player);
-        for (var i=0;i<players.length;i++){
-            var e = players[i];
-            var eCent = e.getBounds().c;
-            var eLead = getLeadingPlayerPoint(player);
-            var objs = getObjectsUnderGameboardRadius(eCent);
-            var collision = false;
-            if (objs.length > 0){
-                for (var j=0;j<objs.length;j++) { 
-                    var obj = objs[j];
-                    //check for players
-                    //check for trails
-                    if (obj.parent.type == "player") { 
-                        if (obj.parent.name==e.name)
-                        //player
-                        var n = (obj.parent.type) ? obj.parent.name : obj.name;
-                        if (n != e.name) {
-                            collision = true; 
-                            console.log(e.name + " COLLISION w");
-                            console.log(obj);
-                            break;
-                        }
-                    } else if (obj.parent.type=="trail"){                        
-                        if (obj.parent.owner.name != e.name){ collision = true; break; }
-                    } else { collision = true; break; }
-                }
-            }
-            if (collision) { handleCollision(e); console.log("COLLISION: " + e.name); }
-        }        
-    }
-    function detectCollisions2(){
-        if (!player.parent) return; 
-        var playerLead = getLeadingPlayerPoint(player);
-        //var playerLead = player.getBounds().c;
-        //if (!checkEmptyPoint(playerLead.x,playerLead.y,true,player.turning)){
-        var pCent = player.getBounds().c;
-        var objs = gameboard.getObjectsUnderPoint(pCent.x,pCent.y);
-        if (objs.length>0){
-            for (var i=0;i<objs.length;i++){
-                obj = objs[i];
-                if (obj != player && obj.parent != player 
-                    && obj.parent != playerTrail
-                    ) {
-                    console.log('player collision w:')
-                    console.log(obj);
-                    handleCollision(player);
-                    break;
-                }
-            }
-        }
-        for (var i=0;i<enemies.length;i++){
-            var e = enemies[i];
-            //var eLead = getLeadingPlayerPoint(e);
-            var eCent = e.getBounds().c;
-            //var objs = gameboard.getObjectsUnderPoint(eCent.x,eCent.y);
-            var objs = getObjectsUnderGameboardRadius(eCent);
-            //console.log("getObjectsUnderGameboardRadius:" + objs.length);
-            /*
-            for (var i=0;i<enemyTrails.length;i++){
-                var t = enemyTrails[i];
-                var ret = ndgmr.checkRectCollision(e,t);      
-                if (ret) objs.push(ret);
-            }
-            */
-            if (objs.length>0){
-                for (var i=0;i<objs.length;i++){
-                    obj = objs[i];
-                    var collided = false;
-                    if (obj.parent != e){
-                        //console.log(e.name+' poss coll');
-                        if (obj.parent.owner) {
-                            if (obj.parent.owner.name != e.name) { 
-                                collided = true; 
-                                console.log('trail found for ' + obj.parent.owner.name);
-                            }
-                        } else { collided = true; }                  
-                    }
-                    if (collided){
-                        //if (!checkEmptyPoint(eLead.x,eLead.y,false,false)){
-                        console.log(e.name + ' collision w:')
-                        console.log(obj);
-                        handleCollision(e);
-                    }
-                }
-            }
-        }
-    }
-    
-    function getObjectsUnderGameboardRadius(pt){
-        var r = 5;
-        var objs = [];
-        var pts = [pt,pt.clone(),pt.clone(),pt.clone(),pt.clone(),pt.clone(),pt.clone(),pt.clone(),pt.clone()];
-        pts[1].x -= r; pts[1].y -= r;
-        pts[2].x -= r; pts[2].y += r;
-        pts[3].x += r; pts[3].y += r;
-        pts[4].x += r; pts[4].y -= r;
-        pts[5].y -= r;
-        pts[6].x -= r;
-        pts[7].y += r;
-        pts[8].x += r;
-        for (var i=0;i<9;i++){
-            var tmps = gameboard.getObjectsUnderPoint(pts[i].x,pts[i].y);
-            for (var j=0;j<tmps.length;j++) { objs.push(tmps[j]); }
-        }
-        return objs;
     }
     function getLeadingPlayerPoint(obj){
         if (obj.direction == 0) return obj.getBounds().cl;
@@ -551,8 +427,6 @@
         nextState = "GAMEOVER";
     }
     function clearEnemy(e){
-        console.log("clearEnemy")
-        console.log(e);
         for (var i=0;i<enemyTrails.length;i++){
             if (enemyTrails[i].owner.name == e.name) {
                 //enemyTrails[i].uncache();
@@ -561,13 +435,11 @@
                 break;
             }
         }
-        console.log("enemy trails cleared");
         for (var i=0;i<enemies.length;i++){
             if (enemies[i].name == e.name) {
                 enemies.splice(i,1); break;
             }
         }
-        console.log("enemy cleared");
         gameboard.removeChild(e);
     }
     function respawnPlayer(){
@@ -703,7 +575,6 @@
             case Math.PI*1.5:
                 return new createjs.Point(p.x,(Math.ceil(p.y/blocksize)+1)*blocksize); break;
             default:
-                console.log(p.direction);
                 console.log("UNKOWN!"); break;
         }
         
@@ -785,20 +656,16 @@
     }
     Player.prototype.changeDirection = function(dir){
         this.turnedAt = new createjs.Point(Math.floor(this.x/blocksize),Math.floor(this.y/blocksize));
-        //console.log(this.direction);
         if (this.direction == dir || Math.abs(this.direction-dir) == Math.PI) return;
-        //this.turning = true;
         switch(this.direction){
             case 0:
                 this.changeTo(Math.floor(this.x/blocksize)*blocksize,this.y,this.direction,dir); 
                 break;
             case Math.PI:
-                //## should use ceil and factor for added space
                 this.changeTo(Math.ceil(this.x/blocksize)*blocksize,this.y,this.direction,dir); break;
             case Math.PI/2:
                 this.changeTo(this.x,Math.floor(this.y/blocksize)*blocksize,this.direction,dir); break;
             case Math.PI*1.5:
-                //## should use ceil and factor for added space
                 this.changeTo(this.x,Math.ceil(this.y/blocksize)*blocksize,this.direction,dir); 
                 break;
             default:
@@ -835,14 +702,7 @@
         var pt = new createjs.Point(x,y);
         this.trail = [];
         var t = new TrailBlock(pt,newdir,true,olddir);
-        //if (this.lastTrail){
-        //    if (this.lastTrail.pos.x != t.pos.x && 
-        //        this.lastTrail.pos.y != t.pos.y) this.trail.push(this.lastTrail); }
-        //if (olddir == Math.PI) this.trail.push(t);
-        //else 
         this.lastTrail = t;
-        //this.trail.push();
-        //this.trail.push(prev);
         createjs.Sound.play("sound-turn");
         
     }
@@ -858,7 +718,6 @@
         switch (this.direction){
             case Math.PI:
                 gridx = Math.ceil(this.x/blocksize)*blocksize;
-                //gridy = Math.floor(this.y/blocksize)*blocksize;
                 break;
             case Math.PI*1.5:
                 gridy = Math.ceil(this.y/blocksize)*blocksize;
@@ -875,62 +734,6 @@
         } else { 
             this.lastTrail = new TrailBlock(gridpt,this.direction,false); 
         }
-        return;
-        //## what was i thinking????
-        /*
-        if (this.turning){
-            var dx = diff(this.turnedAt.x,this.x);
-            var dy = diff(this.turnedAt.x,this.x);
-            if (dx>blocksize || dy > blocksize) {
-                this.turning = false;
-                this.turnedAt = new createjs.Point(0,0);
-            }
-        }
-        var gridx = Math.floor(this.x/blocksize)*blocksize;
-        var gridy = Math.floor(this.y/blocksize)*blocksize;
-        var gridpt = new createjs.Point(gridx,gridy);
-        if (this.lastTrail){
-            var l = this.lastTrail;
-            var left = l.dir > this.direction+0.1;
-            if (l.pos.x != gridx || l.pos.y != gridy) { 
-                var corner = this.lastTrail.dir != this.direction;
-                if (false){//corner){
-                    var lpt = gridpt.clone();
-                    var incpre = false;
-                    var skipnew = false;
-                    switch(this.direction){
-                        case 0:
-                            if (left) lpt.x+=blocksize;
-                            break;
-                        case Math.PI/2:
-                            if (left) { lpt.y += blocksize; incpre = true; }
-                            break;
-                        case Math.PI:
-                            //lpt.y -= blocksize;
-                            if (left) incpre = true;
-                            else lpt.x -= blocksize;
-                            break;
-                        case Math.PI*1.5:
-                            if (left) lpt.x += blocksize;
-                            else { lpt.y += blocksize; incpre = false; skipnew = true; }
-                            break;
-                        default:
-                            console.log('UNKNOWN DIR!');
-                            break;
-                    }
-                    var c = new TrailBlock(lpt,this.direction,corner);
-                    if (incpre){
-                        this.trail.push(this.lastTrail);//(gridpt);
-                    }
-                    this.trail.push(c);
-                    this.lastTrail = null;
-                } else {
-                    this.trail.push(this.lastTrail);//(gridpt);
-                    this.lastTrail = new TrailBlock(gridpt,this.direction,corner);
-                }
-            }
-        } else { this.lastTrail = new TrailBlock(gridpt,this.direction,false); }
-        */
     }
     //## Button object
     function Button(onState,offState){
@@ -997,10 +800,8 @@
         this.gridPositions = [];
     }
     Trail.prototype.update = function(){
-        //if (createjs.Ticker.getTicks() % 2 > 0) return;
         if (this.owner.trail.length<1) return;
         
-        //this.graphics.beginFill(this.color);
         while (this.owner.trail.length>0){
             var tb = this.owner.trail.shift();
             var b = tb.useCorner ? this.bmpCorner.clone() : this.bmp.clone();
@@ -1013,7 +814,6 @@
                 left = (tb.oldDir > tb.dir);
                 left = (tb.dir==0 && tb.oldDir == Math.PI*1.5) ? false : left;
                 left = (tb.dir==Math.PI*1.5 && tb.oldDir == 0) ? true : left;
-                //console.log(left);
             }
             
             
@@ -1076,6 +876,21 @@
         this.useCorner = corner;
     }
     </script>
+<script type="text/javascript">
+
+  var _gaq = _gaq || [];
+  _gaq.push(['_setAccount', 'UA-220824-1']);
+  _gaq.push(['_setDomainName', 'playvue.com']);
+  _gaq.push(['_trackPageview']);
+
+  (function() {
+    var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+    ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+    var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+  })();
+
+</script>
+    
 </head>
     
 <body onload="init();">
